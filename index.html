@@ -1,0 +1,107 @@
+<!DOCTYPE html><html lang="zh-TW"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>社團評鑑 填寫</title>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="./club-config.js"></script>
+<script>const { firebaseConfig } = window.CLUB_EVAL_CONFIG; firebase.initializeApp(firebaseConfig);</script>
+<style>
+:root{ --bg:#f7f7fb; --card:#ffffff; --text:#0f172a; --sub:#6b7280; --primary:#10b981; --border:#e5e7eb; }
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,"Microsoft JhengHei",Arial,sans-serif;line-height:1.7}
+.container{max-width:900px;margin:40px auto;padding:0 16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px 24px 28px;box-shadow:0 16px 32px rgba(2,6,23,.06);margin-bottom:16px}
+h2{margin:0 0 12px} .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+label{display:block;margin:10px 0 6px;color:var(--sub)}
+select,input,textarea,button{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--border);font-size:16px}
+textarea{min-height:96px} button{background:var(--primary);border:0;color:#fff;cursor:pointer}
+.helper{color:var(--sub);font-size:14px} .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.muted{color:var(--sub)} .locked{opacity:.6;pointer-events:none}
+</style></head><body>
+<div class="container">
+  <div class="card">
+    <h2>社團評鑑 填寫</h2>
+    <div id="who" class="helper">載入中…</div>
+  </div>
+
+  <div class="card">
+    <label>要評的社團</label>
+    <select id="target"></select>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 8px">評分（0–5 分）</h3>
+    <div class="grid">
+      <div><label>活動規劃</label><input id="plan" type="number" min="0" max="5" step="1" value="0"></div>
+      <div><label>團隊執行</label><input id="team" type="number" min="0" max="5" step="1" value="0"></div>
+      <div><label>成果展現</label><input id="show" type="number" min="0" max="5" step="1" value="0"></div>
+      <div><label>書面資料</label><input id="doc"  type="number" min="0" max="5" step="1" value="0"></div>
+    </div>
+    <p class="helper">總分：<b><span id="total">0</span> / 20</b></p>
+    <label>評語</label>
+    <textarea id="comment" placeholder="請填寫亮點與建議（可留白）"></textarea>
+    <div class="row" style="margin-top:12px">
+      <button id="submit">送出評分</button>
+      <span id="msg" class="helper"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+const auth = firebase.auth(); const db = firebase.firestore();
+const CLUBS = window.CLUBS; const meCode = localStorage.getItem('club_code')||'';
+const meEmail = `${meCode}@${window.CLUB_EVAL_CONFIG.loginDomain}`;
+
+function sum(){ return ['plan','team','show','doc'].reduce((s,k)=> s + (+document.getElementById(k).value||0), 0); }
+['plan','team','show','doc'].forEach(id=> document.getElementById(id).oninput=()=>{ document.getElementById('total').textContent = sum(); });
+
+auth.onAuthStateChanged(async u=>{
+  if(!u || u.email !== meEmail){ location.href='login.html'; return; }
+
+  const meName = (CLUBS.find(x=>x.code===meCode)||{}).name || '';
+  document.getElementById('who').innerHTML = `<b>評分人：</b>${meCode} ${meName}
+    <span class="muted">（非本人？<a href="login.html">登出重登</a>）</span>`;
+
+  const sel = document.getElementById('target');
+  CLUBS.filter(x=>x.code!==meCode).sort((a,b)=>a.code.localeCompare(b.code))
+    .forEach(x=>{ const o=document.createElement('option'); o.value=x.code; o.textContent=`${x.code}　${x.name}`; sel.appendChild(o); });
+});
+
+function lockUI(){
+  document.getElementById('submit').classList.add('locked');
+  ['plan','team','show','doc','comment','target'].forEach(id=>{
+    const el=document.getElementById(id); el.setAttribute('disabled','disabled'); el.classList.add('locked');
+  });
+}
+
+document.getElementById('submit').onclick = async ()=>{
+  const u = auth.currentUser; if(!u) return alert('請先登入');
+  const target = document.getElementById('target').value;
+  const key = `${meCode}_${target}`; const msg = document.getElementById('msg');
+
+  if ((await db.collection('evaluations').doc(key).get()).exists){
+    msg.textContent = '已評過此社團，本頁已鎖定。'; lockUI(); return;
+  }
+
+  const tName = (CLUBS.find(x=>x.code===target)||{}).name || '';
+  const scores = {
+    score_plan:+document.getElementById('plan').value||0,
+    score_team:+document.getElementById('team').value||0,
+    score_show:+document.getElementById('show').value||0,
+    score_doc:+document.getElementById('doc').value||0,
+  };
+  const total = scores.score_plan + scores.score_team + scores.score_show + scores.score_doc;
+
+  msg.textContent = '送出中…';
+  await db.collection('evaluations').doc(key).set({
+    evaluator_code: meCode,
+    evaluator_name: (CLUBS.find(x=>x.code===meCode)||{}).name || '',
+    target_code: target, target_name: tName,
+    ...scores, total,
+    comment: (document.getElementById('comment').value||'').trim(),
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  msg.textContent = '已送出 ✔ 本頁已鎖定'; lockUI();
+};
+</script>
+</body></html>
