@@ -1,0 +1,61 @@
+<!DOCTYPE html><html lang="zh-TW"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>社團評鑑系統 登入</title>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="./club-config.js"></script>
+<script>
+const { firebaseConfig } = window.CLUB_EVAL_CONFIG;
+firebase.initializeApp(firebaseConfig);
+</script>
+<style>
+:root{ --bg:#f7f7fb; --card:#ffffff; --text:#0f172a; --sub:#6b7280; --primary:#2563eb; --border:#e5e7eb; }
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,"Microsoft JhengHei",Arial,sans-serif;line-height:1.6}
+.container{max-width:780px;margin:40px auto;padding:0 16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px 24px 28px;box-shadow:0 16px 32px rgba(2,6,23,.06)}
+h1{margin:0 0 16px;font-size:26px}
+label{display:block;margin:12px 0 6px;color:var(--sub)}
+select,input,button{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--border);font-size:16px}
+input,select{background:#fff} button{background:var(--primary);border:0;color:#fff;cursor:pointer;margin-top:14px}
+.helper{color:var(--sub);font-size:14px;margin-top:8px}
+.badge{display:inline-block;background:#eef2ff;color:#3730a3;border-radius:999px;padding:4px 10px;font-size:12px;margin-top:8px}
+.error{color:#b91c1c;margin-top:8px}
+</style></head><body>
+<div class="container">
+  <div class="card">
+    <h1>社團評鑑系統 登入</h1>
+    <label>選擇社團（代號＋名稱）</label>
+    <select id="club"></select>
+    <div class="helper">登入帳號將會是：<span class="badge" id="emailPreview"></span></div>
+    <label>密碼</label>
+    <input id="pass" type="password" placeholder="預設 123456"/>
+    <button id="login">登入</button>
+    <div id="msg" class="error"></div>
+  </div>
+</div>
+<script>
+const auth = firebase.auth();
+const domain = window.CLUB_EVAL_CONFIG.loginDomain;
+const CLUBS = window.CLUBS;
+const sel = document.getElementById('club');
+CLUBS.sort((a,b)=>a.code.localeCompare(b.code)).forEach(c=>{
+  const o=document.createElement('option'); o.value=c.code; o.textContent=`${c.code}　${c.name}`; sel.appendChild(o);
+});
+function refreshPreview(){ document.getElementById('emailPreview').textContent = `${sel.value}@${domain}`; }
+sel.onchange = refreshPreview; refreshPreview();
+
+document.getElementById('login').onclick = async ()=>{
+  const code = sel.value;
+  const email = `${code}@${domain}`;
+  const pass  = document.getElementById('pass').value || window.CLUB_EVAL_CONFIG.defaultPassword;
+  const msg = document.getElementById('msg'); msg.textContent='';
+  try{
+    await auth.signInWithEmailAndPassword(email, pass);
+    localStorage.setItem('club_code', code);
+    location.href = 'index.html';
+  }catch(e){
+    msg.textContent = '登入失敗：請確認密碼（預設 123456）或帳號是否已建立';
+  }
+};
+</script>
+</body></html>
